@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>BREAKIN SOULS — World</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <style>
+    html,body{margin:0;height:100%;overflow:hidden;background:#050608;font-family:Arial,Helvetica,sans-serif}
+    canvas{display:block}
+    #ui{position:fixed;inset:0;z-index:10;pointer-events:none;color:white}
+    #gate{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#030405;pointer-events:auto;transition:opacity .8s}
+    #gate .box{text-align:center;padding:24px}
+    #gate h1{font-size:clamp(36px,8vw,84px);margin:0 0 10px;letter-spacing:.08em}
+    #gate p{opacity:.68;margin:0 0 22px;font-size:14px;letter-spacing:.18em;text-transform:uppercase}
+    #enter{pointer-events:auto;border:1px solid rgba(255,255,255,.45);background:transparent;color:white;padding:14px 24px;font-size:16px;letter-spacing:.25em;cursor:pointer}
+    #hint{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);opacity:.55;font-size:12px;letter-spacing:.15em;text-transform:uppercase}
+    #msg{position:absolute;left:50%;top:18%;transform:translateX(-50%);max-width:min(80vw,680px);text-align:center;font-size:clamp(18px,3vw,34px);line-height:1.2;opacity:0;transition:opacity .4s;text-shadow:0 3px 18px #000}
+    #chapter{position:absolute;top:18px;left:18px;font-size:12px;letter-spacing:.22em;text-transform:uppercase;opacity:.7}
+    #reticle{position:absolute;width:8px;height:8px;border:1px solid rgba(255,255,255,.5);border-radius:50%;left:50%;top:50%;transform:translate(-50%,-50%);opacity:.65}
+    #sound{position:absolute;right:18px;top:18px;pointer-events:auto;background:rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.25);color:white;padding:8px 10px;cursor:pointer}
+  </style>
+</head>
+<body>
+<div id="ui">
+  <div id="gate">
+    <div class="box">
+      <h1>BREAKIN SOULS</h1>
+      <p>algo sigue respirando aquí</p>
+      <button id="enter">ENTRAR</button>
+    </div>
+  </div>
+  <div id="chapter">I · BOSQUE</div>
+  <div id="msg"></div>
+  <div id="reticle"></div>
+  <div id="hint">mueve el mouse / toca la pantalla · haz click en lo que brilla</div>
+  <button id="sound">SONIDO: OFF</button>
+</div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x050608);
+scene.fog = new THREE.FogExp2(0x090b0c, 0.035);
+
+const camera = new THREE.PerspectiveCamera(64, innerWidth/innerHeight, .1, 200);
+camera.position.set(0, 2.2, 8);
+
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+const hemi = new THREE.HemisphereLight(0x60707a,0x080807,1.0);
+scene.add(hemi);
+const moon = new THREE.DirectionalLight(0x9fb4c8,1.4);
+moon.position.set(-8,14,6);
+scene.add(moon);
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(90,90),
+  new THREE.MeshStandardMaterial({color:0x11150f, roughness:1})
+);
+ground.rotation.x = -Math.PI/2;
+ground.position.y = 0;
+scene.add(ground);
+
+function tree(x,z,s=1){
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(.18*s,.32*s,3.8*s,7),
+    new THREE.MeshStandardMaterial({color:0x211811,roughness:1})
+  );
+  trunk.position.y = 1.9*s;
+  g.add(trunk);
+
+  for(let i=0;i<3;i++){
+    const crown = new THREE.Mesh(
+      new THREE.ConeGeometry((1.2-i*.18)*s,(2.2-i*.18)*s,8),
+      new THREE.MeshStandardMaterial({color:0x0e1d14,roughness:1})
+    );
+    crown.position.y = (3.8+i*.8)*s;
+    g.add(crown);
+  }
+  g.position.set(x,0,z);
+  g.rotation.y = Math.random()*Math.PI;
+  scene.add(g);
+}
+for(let i=0;i<90;i++){
+  let x=(Math.random()-.5)*54, z=-Math.random()*58+6;
+  if(Math.abs(x)<3.5 && z>-45) x += x<0?-5:5;
+  tree(x,z,.7+Math.random()*.8);
+}
+
+const pathMat = new THREE.MeshStandardMaterial({color:0x22231d,roughness:1});
+const path = new THREE.Mesh(new THREE.PlaneGeometry(6,62),pathMat);
+path.rotation.x=-Math.PI/2; path.position.set(0,.015,-25);
+scene.add(path);
+
+const fireflies = new THREE.BufferGeometry();
+const pts=[];
+for(let i=0;i<260;i++){
+  pts.push((Math.random()-.5)*36, Math.random()*6+.4, -Math.random()*55+4);
+}
+fireflies.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));
+const fp = new THREE.Points(
+  fireflies,
+  new THREE.PointsMaterial({color:0xdde7b3,size:.055,transparent:true,opacity:.75})
+);
+scene.add(fp);
+
+const interactives=[];
+function orb(x,y,z,label,text,color=0xcfdc9f){
+  const m = new THREE.Mesh(
+    new THREE.SphereGeometry(.23,24,24),
+    new THREE.MeshStandardMaterial({color,emissive:color,emissiveIntensity:2})
+  );
+  m.position.set(x,y,z);
+  m.userData={label,text};
+  scene.add(m);
+  interactives.push(m);
+  const light = new THREE.PointLight(color,1.2,4);
+  light.position.copy(m.position); scene.add(light);
+  return m;
+}
+orb(-2.2,1.2,-7,"memoria","No todo lo que desaparece deja de existir.");
+orb(2.5,1.5,-18,"eco","Algunas voces vuelven cuando todo queda en silencio.");
+orb(-1.4,1.0,-30,"cicatriz","Hay heridas que terminan convirtiéndose en mapa.");
+
+const portal = new THREE.Mesh(
+  new THREE.TorusGeometry(1.9,.15,20,70),
+  new THREE.MeshStandardMaterial({color:0x7a91a8,emissive:0x46657d,emissiveIntensity:2})
+);
+portal.position.set(0,2.5,-44);
+portal.userData={label:"portal",text:"II · CIUDAD — PRÓXIMAMENTE"};
+scene.add(portal); interactives.push(portal);
+
+const raycaster=new THREE.Raycaster();
+const pointer=new THREE.Vector2(0,0);
+let entered=false, mx=0,my=0;
+let targetZ=8;
+
+function setPointer(x,y){
+  pointer.x=(x/innerWidth)*2-1;
+  pointer.y=-(y/innerHeight)*2+1;
+  mx=pointer.x; my=pointer.y;
+}
+addEventListener('mousemove',e=>setPointer(e.clientX,e.clientY));
+addEventListener('touchmove',e=>{
+  const t=e.touches[0]; if(t) setPointer(t.clientX,t.clientY);
+},{passive:true});
+
+function showMessage(t){
+  const el=document.getElementById('msg');
+  el.textContent=t; el.style.opacity=1;
+  clearTimeout(showMessage._t);
+  showMessage._t=setTimeout(()=>el.style.opacity=0,2800);
+}
+
+addEventListener('click',()=>{
+  if(!entered) return;
+  raycaster.setFromCamera(pointer,camera);
+  const hits=raycaster.intersectObjects(interactives,false);
+  if(hits.length){
+    const o=hits[0].object;
+    showMessage(o.userData.text);
+    if(o===portal) {
+      document.getElementById('chapter').textContent="II · CIUDAD";
+      scene.fog.color.set(0x111318);
+      scene.background.set(0x08090b);
+    }
+  }
+});
+
+addEventListener('wheel',e=>{
+  if(!entered) return;
+  targetZ += e.deltaY*.012;
+  targetZ = THREE.MathUtils.clamp(targetZ,-39,8);
+},{passive:true});
+
+document.getElementById('enter').onclick=()=>{
+  entered=true;
+  const g=document.getElementById('gate');
+  g.style.opacity=0; setTimeout(()=>g.style.display='none',850);
+  showMessage("Camina. Mira. Escucha.");
+};
+
+let audioOn=false, ctx, noise;
+document.getElementById('sound').onclick=async(e)=>{
+  if(!ctx){
+    ctx=new (window.AudioContext||window.webkitAudioContext)();
+    const buffer=ctx.createBuffer(1,ctx.sampleRate*2,ctx.sampleRate);
+    const d=buffer.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*0.05;
+    noise=ctx.createBufferSource(); noise.buffer=buffer; noise.loop=true;
+    const filter=ctx.createBiquadFilter(); filter.type='lowpass'; filter.frequency.value=450;
+    const gain=ctx.createGain(); gain.gain.value=.16;
+    noise.connect(filter).connect(gain).connect(ctx.destination); noise.start();
+  }
+  audioOn=!audioOn;
+  if(ctx) audioOn?ctx.resume():ctx.suspend();
+  e.target.textContent='SONIDO: '+(audioOn?'ON':'OFF');
+};
+
+function animate(t){
+  requestAnimationFrame(animate);
+  const time=t*.001;
+  fp.rotation.y=Math.sin(time*.08)*.02;
+  fp.position.y=Math.sin(time*.6)*.05;
+
+  interactives.forEach((o,i)=>{
+    if(o!==portal) o.position.y += Math.sin(time*1.7+i)*.0009;
+    o.rotation.y += .004;
+  });
+  portal.rotation.z=time*.12;
+
+  camera.position.z += (targetZ-camera.position.z)*.035;
+  camera.position.x += ((mx*1.15)-camera.position.x)*.025;
+  camera.position.y += ((2.2+my*.45)-camera.position.y)*.025;
+  camera.lookAt(mx*.7,1.9+my*.2,camera.position.z-10);
+
+  renderer.render(scene,camera);
+}
+animate();
+
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
